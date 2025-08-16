@@ -23,14 +23,12 @@ interface DayData {
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-// Orange color levels - darker = more trades
+// Orange color levels - white for no trades, darker oranges for 1-3+ trades
 const COLOR_LEVELS = [
-  "#FEF3E2", // Level 0 - very light orange (no trades)
-  "#FED7AA", // Level 1 - light orange (1-2 trades)
-  "#FDBA74", // Level 2 - medium light orange (3-4 trades)
-  "#FB923C", // Level 3 - medium orange (5-6 trades)
-  "#F97316", // Level 4 - bright orange (7-8 trades)
-  "#EA580C", // Level 5 - dark orange (9+ trades)
+  "#FFFFFF", // Level 0 - white (no trades)
+  "#FB923C", // Level 1 - medium orange (1 trade)
+  "#F97316", // Level 2 - bright orange (2 trades)
+  "#EA580C", // Level 3 - dark orange (3+ trades)
 ]
 
 export default function TradingHeatmap({ trades }: TradingHeatmapProps) {
@@ -65,12 +63,13 @@ export default function TradingHeatmap({ trades }: TradingHeatmapProps) {
 
       // Determine color level based on trade count
       let level = 0
-      if (count === 0) level = 0
-      else if (count <= 2) level = 1
-      else if (count <= 4) level = 2
-      else if (count <= 6) level = 3
-      else if (count <= 8) level = 4
-      else level = 5
+      if (count === 0)
+        level = 0 // White - no trades
+      else if (count === 1)
+        level = 1 // Medium orange - 1 trade
+      else if (count === 2)
+        level = 2 // Bright orange - 2 trades
+      else level = 3 // Dark orange - 3+ trades (capped visually)
 
       days.push({
         date: dateString,
@@ -176,7 +175,7 @@ export default function TradingHeatmap({ trades }: TradingHeatmapProps) {
           </div>
 
           {/* Calendar grid */}
-          <div className="flex items-start gap-1">
+          <div className="flex gap-[2px] pt-4">
             {/* Day labels */}
             <div className="flex flex-col gap-[2px] pt-4">
               {DAYS.map((day, index) => (
@@ -196,6 +195,7 @@ export default function TradingHeatmap({ trades }: TradingHeatmapProps) {
                       className="w-[10px] h-[10px] rounded-sm cursor-pointer hover:ring-1 hover:ring-orange-400 transition-all"
                       style={{
                         backgroundColor: COLOR_LEVELS[day.level],
+                        border: day.level === 0 ? "1px solid #e5e7eb" : "none",
                       }}
                       title={formatTooltip(day)}
                     />

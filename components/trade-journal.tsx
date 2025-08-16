@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { BookOpen, Plus, Edit, Trash2, TrendingUp, TrendingDown, Brain, AlertTriangle, ChevronDown } from "lucide-react"
 import { useCurrency } from "@/app/page"
+import { useAuth } from "@/lib/auth"
+import { UserDataService } from "@/lib/user-data"
 
 interface Trade {
   id: string
@@ -94,6 +96,7 @@ const initialTradeState: Partial<Trade> = {
 }
 
 export default function TradeJournal() {
+  const { user } = useAuth()
   const [trades, setTrades] = useState<Trade[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -117,101 +120,270 @@ export default function TradeJournal() {
     }
   }, [])
 
-  // Load trades from localStorage on component mount
+  // Load trades from user data or localStorage
   useEffect(() => {
     const loadTrades = async () => {
-      const savedTrades = localStorage.getItem("tradeJournal")
-      if (savedTrades) {
-        try {
-          const parsedTrades = JSON.parse(savedTrades)
-          setTrades(parsedTrades)
-        } catch (error) {
-          console.error("Error loading trades:", error)
-        }
+      if (user) {
+        // Load user-specific trades
+        const userTrades = UserDataService.getTradeJournal(user.id)
+        setTrades(userTrades)
       } else {
-        // Initialize with sample data
-        const sampleTrades: Trade[] = [
-          {
-            id: "1",
-            symbol: "AAPL",
-            type: "Long",
-            entryDate: "2024-01-19",
-            entryTime: "09:45",
-            shares: 100,
-            entryPrice: 185.5,
-            notes: "Breakout above resistance with volume",
-            strategy: "Swing Trade",
-            status: "Open",
-            entryMode: "detailed",
-            emotion: "focused",
-            mistakes: ["Risk Management Error"],
-          },
-          {
-            id: "2",
-            symbol: "TSLA",
-            type: "Long",
-            entryDate: "2024-01-18",
-            entryTime: "10:30",
-            exitDate: "2024-01-19",
-            exitTime: "14:15",
-            shares: 50,
-            entryPrice: 245.8,
-            exitPrice: 252.3,
-            pnl: 325.0,
-            notes: "Quick momentum play on earnings beat",
-            strategy: "Day Trade",
-            status: "Closed",
-            entryMode: "detailed",
-            emotion: "focused",
-          },
-          {
-            id: "3",
-            symbol: "MSFT",
-            type: "Long",
-            entryDate: "2024-01-17",
-            entryTime: "11:00",
-            exitDate: "2024-01-18",
-            exitTime: "15:30",
-            shares: 75,
-            entryPrice: 412.25,
-            exitPrice: 408.9,
-            pnl: -251.25,
-            notes: "Stopped out on market weakness",
-            strategy: "Swing Trade",
-            status: "Closed",
-            entryMode: "detailed",
-            emotion: "nervous",
-            mistakes: ["Ignored Stop Loss", "Emotional Trading"],
-          },
-          {
-            id: "4",
-            symbol: "NVDA",
-            type: "Long",
-            entryDate: "2024-01-16",
-            entryTime: "13:20",
-            shares: 25,
-            entryPrice: 598.75,
-            notes: "AI sector strength, holding for earnings",
-            strategy: "Position Trade",
-            status: "Open",
-            entryMode: "detailed",
-            emotion: "trusting",
-          },
-        ]
-        setTrades(sampleTrades)
-        localStorage.setItem("tradeJournal", JSON.stringify(sampleTrades))
+        // Load anonymous trades
+        const savedTrades = localStorage.getItem("tradeJournal")
+        if (savedTrades) {
+          try {
+            const parsedTrades = JSON.parse(savedTrades)
+            setTrades(parsedTrades)
+          } catch (error) {
+            console.error("Error loading trades:", error)
+          }
+        } else {
+          // Initialize with sample data for anonymous users - 12 trades across 12 months
+          const sampleTrades: Trade[] = [
+            {
+              id: "1",
+              symbol: "AAPL",
+              type: "Long",
+              entryDate: "2024-01-15",
+              entryTime: "09:30",
+              exitDate: "2025-01-18",
+              exitTime: "15:45",
+              shares: 100,
+              entryPrice: 185.5,
+              exitPrice: 192.3,
+              pnl: 680.0,
+              notes: "Strong earnings beat, held through resistance break",
+              strategy: "Earnings Play",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "focused",
+              mistakes: [],
+            },
+            {
+              id: "2",
+              symbol: "TSLA",
+              type: "Short",
+              entryDate: "2024-02-08",
+              entryTime: "10:15",
+              exitDate: "2025-02-12",
+              exitTime: "14:20",
+              shares: 50,
+              entryPrice: 245.8,
+              exitPrice: 238.4,
+              pnl: 370.0,
+              notes: "Overvalued after rally, good short setup at resistance",
+              strategy: "Mean Reversion",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "confident",
+              mistakes: [],
+            },
+            {
+              id: "3",
+              symbol: "NVDA",
+              type: "Long",
+              entryDate: "2024-03-22",
+              entryTime: "11:00",
+              exitDate: "2025-03-25",
+              exitTime: "13:30",
+              shares: 25,
+              entryPrice: 875.2,
+              exitPrice: 912.5,
+              pnl: 932.5,
+              notes: "AI hype continuation, rode the momentum",
+              strategy: "Momentum",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "happy",
+              mistakes: [],
+            },
+            {
+              id: "4",
+              symbol: "MSFT",
+              type: "Long",
+              entryDate: "2024-04-10",
+              entryTime: "09:45",
+              exitDate: "2025-04-15",
+              exitTime: "16:00",
+              shares: 75,
+              entryPrice: 420.15,
+              exitPrice: 408.9,
+              pnl: -843.75,
+              notes: "Misjudged cloud earnings impact, cut losses quickly",
+              strategy: "Earnings Play",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "nervous",
+              mistakes: ["Technical Analysis Error", "Wrong Entry Point"],
+            },
+            {
+              id: "5",
+              symbol: "AMZN",
+              type: "Long",
+              entryDate: "2024-05-03",
+              entryTime: "14:30",
+              exitDate: "2025-05-08",
+              exitTime: "11:15",
+              shares: 40,
+              entryPrice: 178.25,
+              exitPrice: 185.6,
+              pnl: 294.0,
+              notes: "AWS growth story intact, good support bounce",
+              strategy: "Support Bounce",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "focused",
+              mistakes: [],
+            },
+            {
+              id: "6",
+              symbol: "GOOGL",
+              type: "Short",
+              entryDate: "2024-06-18",
+              entryTime: "13:20",
+              exitDate: "2025-06-20",
+              exitTime: "10:45",
+              shares: 60,
+              entryPrice: 175.8,
+              exitPrice: 182.4,
+              pnl: -396.0,
+              notes: "Unexpected AI announcement pumped the stock, stopped out",
+              strategy: "Technical Breakdown",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "frustrated",
+              mistakes: ["News Influence", "Ignored Stop Loss"],
+            },
+            {
+              id: "7",
+              symbol: "META",
+              type: "Long",
+              entryDate: "2024-07-12",
+              entryTime: "10:00",
+              exitDate: "2025-07-19",
+              exitTime: "15:30",
+              shares: 35,
+              entryPrice: 495.3,
+              exitPrice: 518.75,
+              pnl: 820.75,
+              notes: "VR/AR developments driving growth, perfect breakout",
+              strategy: "Breakout",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "confident",
+              mistakes: [],
+            },
+            {
+              id: "8",
+              symbol: "SPY",
+              type: "Short",
+              entryDate: "2024-08-05",
+              entryTime: "09:30",
+              exitDate: "2025-08-07",
+              exitTime: "16:00",
+              shares: 200,
+              entryPrice: 545.2,
+              exitPrice: 538.9,
+              pnl: 1260.0,
+              notes: "Market correction play, VIX spike indicated fear",
+              strategy: "Market Hedge",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "focused",
+              mistakes: [],
+            },
+            {
+              id: "9",
+              symbol: "AMD",
+              type: "Long",
+              entryDate: "2024-09-14",
+              entryTime: "11:30",
+              exitDate: "2025-09-16",
+              exitTime: "14:00",
+              shares: 80,
+              entryPrice: 142.6,
+              exitPrice: 138.2,
+              pnl: -352.0,
+              notes: "Chip sector rotation didn't materialize as expected",
+              strategy: "Sector Rotation",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "disappointed",
+              mistakes: ["Market Condition Misjudgment"],
+            },
+            {
+              id: "10",
+              symbol: "NFLX",
+              type: "Long",
+              entryDate: "2024-10-20",
+              entryTime: "12:15",
+              exitDate: "2025-10-25",
+              exitTime: "13:45",
+              shares: 30,
+              entryPrice: 685.4,
+              exitPrice: 702.8,
+              pnl: 522.0,
+              notes: "Subscriber growth exceeded expectations, held through volatility",
+              strategy: "Earnings Play",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "patient",
+              mistakes: [],
+            },
+            {
+              id: "11",
+              symbol: "COIN",
+              type: "Long",
+              entryDate: "2024-11-08",
+              entryTime: "10:45",
+              exitDate: "2025-11-12",
+              exitTime: "15:15",
+              shares: 45,
+              entryPrice: 285.9,
+              exitPrice: 312.4,
+              pnl: 1192.5,
+              notes: "Bitcoin rally lifted crypto stocks, perfect timing",
+              strategy: "Crypto Momentum",
+              status: "Closed",
+              entryMode: "detailed",
+              emotion: "excited",
+              mistakes: [],
+            },
+            {
+              id: "12",
+              symbol: "QQQ",
+              type: "Long",
+              entryDate: "2024-12-15",
+              entryTime: "09:45",
+              shares: 150,
+              entryPrice: 485.3,
+              notes: "Year-end rally setup, tech leading the way",
+              strategy: "Seasonal Play",
+              status: "Open",
+              entryMode: "detailed",
+              emotion: "optimistic",
+              mistakes: [],
+            },
+          ]
+          setTrades(sampleTrades)
+          localStorage.setItem("tradeJournal", JSON.stringify(sampleTrades))
+        }
       }
     }
 
     loadTrades()
-  }, [])
+  }, [user])
 
-  // Save trades to localStorage whenever trades change
+  // Save trades to user data or localStorage
   useEffect(() => {
     if (trades.length > 0) {
-      localStorage.setItem("tradeJournal", JSON.stringify(trades))
+      if (user) {
+        UserDataService.saveTradeJournal(user.id, trades)
+      } else {
+        localStorage.setItem("tradeJournal", JSON.stringify(trades))
+      }
     }
-  }, [trades])
+  }, [trades, user])
 
   // Sort trades: Open trades first (by entry date desc), then closed trades (by exit date desc)
   const sortedTrades = [...trades].sort((a, b) => {
@@ -384,7 +556,10 @@ export default function TradeJournal() {
             <BookOpen className="h-8 w-8" />
             Trade Journal
           </h1>
-          <p className="text-muted-foreground mt-2">Track and analyze your trading performance</p>
+          <p className="text-muted-foreground mt-2">
+            Track and analyze your trading performance
+            {user && <span className="ml-2 text-green-400">• Synced to your account</span>}
+          </p>
         </div>
 
         <Button onClick={openAddDialog}>
@@ -534,6 +709,9 @@ export default function TradeJournal() {
             <div className="text-center py-12">
               <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500">No trades recorded yet. Add your first trade to get started!</p>
+              {!user && (
+                <p className="text-sm text-gray-400 mt-2">Sign in to save your trades permanently across devices</p>
+              )}
             </div>
           )}
         </CardContent>

@@ -31,7 +31,7 @@ import {
   XCircle,
   Settings,
 } from "lucide-react"
-import { useTheme } from "next-themes"
+import { useTheme } from "@/components/theme-provider"
 import { useCurrency } from "@/app/page"
 
 interface ScreenerResult {
@@ -421,45 +421,316 @@ export default function StockScreener() {
     }
   }
 
+  // Enhanced risk analysis function
+  const generateDetailedRiskAnalysis = (stockData: any, scores: any) => {
+    const { quote, profile, symbol, sector } = stockData
+    const warnings = []
+
+    // Price volatility analysis
+    const dailyVolatility = Math.abs(quote.dp)
+    if (dailyVolatility > 8) {
+      warnings.push(
+        `Extreme volatility: ${dailyVolatility.toFixed(1)}% daily move indicates high risk and potential for significant losses`,
+      )
+    } else if (dailyVolatility > 5) {
+      warnings.push(
+        `High volatility: ${dailyVolatility.toFixed(1)}% daily move suggests elevated risk and unpredictable price swings`,
+      )
+    } else if (dailyVolatility > 3) {
+      warnings.push(
+        `Moderate volatility: ${dailyVolatility.toFixed(1)}% daily move indicates normal market fluctuations but watch for trend changes`,
+      )
+    }
+
+    // Price position analysis
+    const dailyRange = quote.h - quote.l
+    const positionInRange = dailyRange > 0 ? (quote.c - quote.l) / dailyRange : 0.5
+
+    if (positionInRange < 0.2) {
+      warnings.push(
+        `Trading near daily low (${(positionInRange * 100).toFixed(0)}% of range): Risk of further decline if support breaks`,
+      )
+    } else if (positionInRange > 0.8) {
+      warnings.push(
+        `Trading near daily high (${(positionInRange * 100).toFixed(0)}% of range): Limited upside, potential for profit-taking pullback`,
+      )
+    }
+
+    // Market cap risk assessment
+    if (profile.marketCapitalization < 1000) {
+      warnings.push(
+        `Micro-cap risk ($${(profile.marketCapitalization).toFixed(0)}M): High volatility, low liquidity, susceptible to manipulation`,
+      )
+    } else if (profile.marketCapitalization < 10000) {
+      warnings.push(
+        `Small-cap risk ($${(profile.marketCapitalization / 1000).toFixed(1)}B): Higher volatility than large-caps, limited institutional support`,
+      )
+    } else if (profile.marketCapitalization < 50000) {
+      warnings.push(
+        `Mid-cap considerations ($${(profile.marketCapitalization / 1000).toFixed(1)}B): Moderate volatility, growth potential with increased risk`,
+      )
+    }
+
+    // Price level risks
+    if (quote.c < 5) {
+      warnings.push(
+        `Low-priced stock ($${quote.c.toFixed(2)}): Higher percentage moves, potential delisting risk, limited institutional interest`,
+      )
+    } else if (quote.c < 10) {
+      warnings.push(
+        `Sub-$10 stock ($${quote.c.toFixed(2)}): Increased volatility risk, potential for significant percentage moves`,
+      )
+    }
+
+    // Momentum and trend risks
+    if (quote.dp < -5) {
+      warnings.push(
+        `Significant decline (${quote.dp.toFixed(1)}%): Bearish momentum, risk of continued selling pressure and technical breakdown`,
+      )
+    } else if (quote.dp < -3) {
+      warnings.push(
+        `Notable decline (${quote.dp.toFixed(1)}%): Negative momentum, watch for support levels and potential reversal signals`,
+      )
+    } else if (quote.dp > 8) {
+      warnings.push(
+        `Parabolic move (+${quote.dp.toFixed(1)}%): Overextended, high risk of sharp reversal and profit-taking`,
+      )
+    } else if (quote.dp > 5) {
+      warnings.push(
+        `Strong rally (+${quote.dp.toFixed(1)}%): Momentum may be unsustainable, consider taking profits or tightening stops`,
+      )
+    }
+
+    // Gap analysis
+    const gapPercent = ((quote.o - quote.pc) / quote.pc) * 100
+    if (Math.abs(gapPercent) > 3) {
+      if (gapPercent > 0) {
+        warnings.push(
+          `Gap up ${gapPercent.toFixed(1)}%: Risk of gap fill, early buyers may take profits causing pullback`,
+        )
+      } else {
+        warnings.push(
+          `Gap down ${Math.abs(gapPercent).toFixed(1)}%: Bearish sentiment, risk of continued selling if gap doesn't fill`,
+        )
+      }
+    }
+
+    // Sector-specific risks
+    const sectorRisks = {
+      Technology: "Tech sector volatility, regulatory risks, rapid obsolescence, high valuations",
+      Healthcare: "Regulatory approval risks, patent cliffs, FDA decisions, clinical trial outcomes",
+      "Financial Services": "Interest rate sensitivity, credit risks, regulatory changes, economic cycle dependency",
+      Energy: "Commodity price volatility, environmental regulations, geopolitical risks, cyclical nature",
+      "Consumer Cyclical": "Economic sensitivity, consumer spending patterns, seasonal variations",
+      "Consumer Defensive": "Inflation impact on margins, competitive pressures, changing consumer preferences",
+      Industrial: "Economic cycle dependency, supply chain disruptions, raw material costs",
+      "Real Estate": "Interest rate sensitivity, economic downturns, property market cycles",
+      Utilities: "Regulatory risks, interest rate sensitivity, infrastructure costs",
+      Materials: "Commodity price cycles, global demand fluctuations, environmental regulations",
+      "Communication Services": "Regulatory scrutiny, technological disruption, advertising spending cycles",
+    }
+
+    if (sectorRisks[sector]) {
+      warnings.push(`${sector} sector risks: ${sectorRisks[sector]}`)
+    }
+
+    // Technical score risks
+    if (scores.technicalScore < 30) {
+      warnings.push(
+        `Weak technical setup (${scores.technicalScore.toFixed(0)}/100): Poor chart patterns, broken support levels, bearish indicators`,
+      )
+    } else if (scores.technicalScore < 50) {
+      warnings.push(
+        `Below-average technicals (${scores.technicalScore.toFixed(0)}/100): Mixed signals, lack of clear direction, choppy price action`,
+      )
+    }
+
+    // Risk score analysis
+    if (scores.riskScore < 40) {
+      warnings.push(
+        `High risk profile (${scores.riskScore.toFixed(0)}/100): Elevated volatility, poor risk-adjusted returns, potential for significant losses`,
+      )
+    } else if (scores.riskScore < 60) {
+      warnings.push(
+        `Moderate risk concerns (${scores.riskScore.toFixed(0)}/100): Above-average volatility, monitor position sizing and stop losses`,
+      )
+    }
+
+    // Quality score risks
+    if (scores.qualityScore < 50) {
+      warnings.push(
+        `Quality concerns (${scores.qualityScore.toFixed(0)}/100): Weak fundamentals, inconsistent earnings, potential business model issues`,
+      )
+    }
+
+    // Market timing risks
+    const marketHour = new Date().getHours()
+    if (marketHour < 10) {
+      warnings.push("Opening hour volatility: First hour typically sees highest volatility and widest spreads")
+    } else if (marketHour > 15) {
+      warnings.push("Closing hour risks: End-of-day volatility, potential for unexpected moves on low volume")
+    }
+
+    // Liquidity considerations based on market cap
+    if (profile.marketCapitalization < 5000) {
+      warnings.push(
+        "Liquidity risk: Lower market cap may result in wider bid-ask spreads and difficulty executing large orders",
+      )
+    }
+
+    // Add general market risks if no specific risks identified
+    if (warnings.length === 0) {
+      warnings.push(
+        "Standard market risks: Subject to market volatility, economic conditions, and sector-specific factors",
+      )
+      warnings.push("Systematic risk: Cannot be diversified away, affected by overall market movements")
+    }
+
+    // Always add position sizing reminder for high-risk situations
+    if (dailyVolatility > 5 || scores.riskScore < 50 || profile.marketCapitalization < 10000) {
+      warnings.push("Risk management: Consider reduced position size, tight stop losses, and defined exit strategy")
+    }
+
+    return warnings
+  }
+
   // Generate reasons and warnings based on real data
   const generateInsights = (stockData: any, scores: any) => {
     const { quote, profile, symbol } = stockData
     const reasons = []
-    const warnings = []
 
     // Positive factors
-    if (quote.dp > 3) reasons.push("Strong positive momentum (+3% today)")
-    else if (quote.dp > 1) reasons.push("Positive momentum today")
+    if (quote.dp > 5) {
+      reasons.push(
+        `Strong bullish momentum: +${quote.dp.toFixed(1)}% gain indicates significant buying interest and positive sentiment`,
+      )
+    } else if (quote.dp > 3) {
+      reasons.push(`Solid positive momentum: +${quote.dp.toFixed(1)}% gain shows healthy buying pressure`)
+    } else if (quote.dp > 1) {
+      reasons.push(`Positive momentum: +${quote.dp.toFixed(1)}% gain suggests mild bullish sentiment`)
+    } else if (quote.dp > 0) {
+      reasons.push(`Slight positive bias: +${quote.dp.toFixed(1)}% gain indicates resilience in current market`)
+    }
 
-    if (profile.marketCapitalization > 100000) reasons.push("Large-cap stability (>$100B market cap)")
-    else if (profile.marketCapitalization > 10000) reasons.push("Mid-cap growth potential")
+    // Market cap advantages
+    if (profile.marketCapitalization > 100000) {
+      reasons.push(
+        `Mega-cap stability: $${(profile.marketCapitalization / 1000).toFixed(0)}B market cap provides institutional support and lower volatility`,
+      )
+    } else if (profile.marketCapitalization > 50000) {
+      reasons.push(
+        `Large-cap strength: $${(profile.marketCapitalization / 1000).toFixed(0)}B market cap offers stability with growth potential`,
+      )
+    } else if (profile.marketCapitalization > 10000) {
+      reasons.push(
+        `Mid-cap opportunity: $${(profile.marketCapitalization / 1000).toFixed(1)}B market cap balances growth potential with reasonable stability`,
+      )
+    }
 
-    if (quote.c > quote.o && quote.c > quote.pc) reasons.push("Trading above both opening and previous close")
+    // Price action analysis
+    if (quote.c > quote.o && quote.c > quote.pc) {
+      const openGain = (((quote.c - quote.o) / quote.o) * 100).toFixed(1)
+      reasons.push(
+        `Strong intraday performance: Trading above both opening (+${openGain}%) and previous close, showing sustained buying`,
+      )
+    } else if (quote.c > quote.pc) {
+      reasons.push(`Above previous close: Positive overnight sentiment and continued buying interest`)
+    }
 
+    // Daily range analysis
     const dailyRange = quote.h - quote.l
     const positionInRange = dailyRange > 0 ? (quote.c - quote.l) / dailyRange : 0.5
-    if (positionInRange > 0.8) reasons.push("Trading near daily high")
-
-    if (scores.technicalScore > 80) reasons.push("Strong technical indicators")
-    if (scores.qualityScore > 85) reasons.push("High quality metrics")
-    if (scores.riskScore > 75) reasons.push("Favorable risk profile")
-
-    // Risk factors
-    if (Math.abs(quote.dp) > 5) warnings.push("High volatility today (>5% move)")
-    else if (Math.abs(quote.dp) > 3) warnings.push("Elevated volatility (>3% move)")
-
-    if (quote.dp < -3) warnings.push("Significant decline today")
-    if (positionInRange < 0.2) warnings.push("Trading near daily low")
-    if (profile.marketCapitalization < 1000) warnings.push("Small-cap volatility risk")
-    if (quote.c < 5) warnings.push("Low-priced stock risk")
-
-    if (scores.riskScore < 50) warnings.push("Elevated risk metrics")
-    if (scores.technicalScore < 40) warnings.push("Weak technical setup")
-
-    return {
-      reasons: reasons.length > 0 ? reasons : ["Algorithmic analysis based on current market data"],
-      warnings: warnings.length > 0 ? warnings : ["Standard market risks apply"],
+    if (positionInRange > 0.8) {
+      reasons.push(
+        `Trading near daily high: Strong momentum with ${(positionInRange * 100).toFixed(0)}% of daily range, indicating bullish control`,
+      )
+    } else if (positionInRange > 0.6) {
+      reasons.push(
+        `Upper range trading: Positioned in top ${(positionInRange * 100).toFixed(0)}% of daily range, showing buying strength`,
+      )
     }
+
+    // Score-based positive factors
+    if (scores.technicalScore > 85) {
+      reasons.push(
+        `Excellent technical setup: ${scores.technicalScore.toFixed(0)}/100 score indicates strong chart patterns and momentum indicators`,
+      )
+    } else if (scores.technicalScore > 75) {
+      reasons.push(
+        `Strong technical indicators: ${scores.technicalScore.toFixed(0)}/100 score shows favorable chart patterns and trend strength`,
+      )
+    } else if (scores.technicalScore > 65) {
+      reasons.push(
+        `Positive technical bias: ${scores.technicalScore.toFixed(0)}/100 score suggests favorable technical conditions`,
+      )
+    }
+
+    if (scores.qualityScore > 85) {
+      reasons.push(
+        `High-quality business: ${scores.qualityScore.toFixed(0)}/100 quality score indicates strong fundamentals and consistent performance`,
+      )
+    } else if (scores.qualityScore > 75) {
+      reasons.push(
+        `Solid business quality: ${scores.qualityScore.toFixed(0)}/100 score shows good fundamental strength`,
+      )
+    }
+
+    if (scores.riskScore > 80) {
+      reasons.push(
+        `Favorable risk profile: ${scores.riskScore.toFixed(0)}/100 risk score indicates lower volatility and better risk-adjusted returns`,
+      )
+    } else if (scores.riskScore > 70) {
+      reasons.push(`Reasonable risk metrics: ${scores.riskScore.toFixed(0)}/100 score suggests manageable risk levels`)
+    }
+
+    if (scores.momentumScore > 80) {
+      reasons.push(
+        `Strong momentum indicators: ${scores.momentumScore.toFixed(0)}/100 score shows positive price and earnings momentum`,
+      )
+    } else if (scores.momentumScore > 70) {
+      reasons.push(
+        `Positive momentum trend: ${scores.momentumScore.toFixed(0)}/100 score indicates favorable momentum conditions`,
+      )
+    }
+
+    // Volume and liquidity advantages
+    if (profile.marketCapitalization > 20000) {
+      reasons.push("High liquidity: Large market cap ensures tight spreads and easy order execution")
+    }
+
+    // Price level advantages
+    if (quote.c > 50) {
+      reasons.push(
+        `Institutional-grade price: $${quote.c.toFixed(2)} price level attracts institutional investors and reduces penny stock risks`,
+      )
+    } else if (quote.c > 20) {
+      reasons.push(
+        `Reasonable price level: $${quote.c.toFixed(2)} provides good balance of affordability and institutional interest`,
+      )
+    }
+
+    // Gap analysis positive
+    const gapPercent = ((quote.o - quote.pc) / quote.pc) * 100
+    if (gapPercent > 2 && quote.c >= quote.o) {
+      reasons.push(
+        `Gap up holding: ${gapPercent.toFixed(1)}% gap up with price maintaining levels shows strong buying conviction`,
+      )
+    }
+
+    // Add default positive if no specific reasons found
+    if (reasons.length === 0) {
+      reasons.push("Algorithmic analysis identifies potential based on current market data and scoring methodology")
+      if (scores.overallScore > 70) {
+        reasons.push(
+          `Above-average overall score: ${scores.overallScore.toFixed(1)}/100 indicates favorable risk-reward characteristics`,
+        )
+      }
+    }
+
+    // Generate detailed risk analysis
+    const warnings = generateDetailedRiskAnalysis(stockData, scores)
+
+    return { reasons, warnings }
   }
 
   // Run screener with real or simulated data
@@ -497,23 +768,49 @@ export default function StockScreener() {
           }
         })
       } else {
-        // Use simulated data (demo mode)
+        // Use simulated data (demo mode) with enhanced risk analysis
         console.log("Using simulated data (demo mode)")
         processedResults = STOCK_SYMBOLS.slice(0, 12).map((symbol, index) => {
           const baseScore = 85 - index * 2.5 + Math.random() * 15
           const price = 25 + Math.random() * 300
           const change = (Math.random() - 0.5) * 15
           const changePercent = (change / price) * 100
+          const marketCap = 1000 + Math.random() * 200000 // Random market cap
 
-          return {
+          // Create simulated stock data for risk analysis
+          const simulatedStock = {
             symbol,
             name: `${symbol} Company Inc.`,
-            sector: ["Technology", "Healthcare", "Finance", "Consumer", "Energy", "Industrial"][
+            sector: ["Technology", "Healthcare", "Financial Services", "Consumer Cyclical", "Energy", "Industrial"][
               Math.floor(Math.random() * 6)
             ],
             price,
             change,
             changePercent,
+            quote: {
+              c: price,
+              d: change,
+              dp: changePercent,
+              h: price + Math.random() * 10,
+              l: price - Math.random() * 10,
+              o: price + (Math.random() - 0.5) * 5,
+              pc: price - change,
+            },
+            profile: {
+              marketCapitalization: marketCap,
+              name: `${symbol} Company Inc.`,
+              finnhubIndustry: [
+                "Technology",
+                "Healthcare",
+                "Financial Services",
+                "Consumer Cyclical",
+                "Energy",
+                "Industrial",
+              ][Math.floor(Math.random() * 6)],
+            },
+          }
+
+          const scores = {
             overallScore: baseScore,
             fundamentalScore: baseScore + (Math.random() - 0.5) * 25,
             technicalScore: baseScore + (Math.random() - 0.5) * 25,
@@ -523,21 +820,19 @@ export default function StockScreener() {
             riskScore: baseScore + (Math.random() - 0.5) * 25,
             sentimentScore: baseScore + (Math.random() - 0.5) * 25,
             volumeScore: baseScore + (Math.random() - 0.5) * 25,
-            reasons: [
-              "Strong momentum indicators",
-              "Above key moving averages",
-              "High institutional ownership",
-              "Positive earnings revisions",
-              "Technical breakout pattern",
-              "Sector rotation tailwind",
-            ].slice(0, Math.floor(Math.random() * 4) + 2),
-            warnings: [
-              "High volatility environment",
-              "Overbought conditions",
-              "Earnings date approaching",
-              "Market uncertainty",
-              "Sector headwinds",
-            ].slice(0, Math.floor(Math.random() * 3) + 1),
+          }
+
+          const insights = generateInsights(simulatedStock, scores)
+
+          return {
+            symbol,
+            name: simulatedStock.name,
+            sector: simulatedStock.sector,
+            price,
+            change,
+            changePercent,
+            ...scores,
+            ...insights,
             confidence: 70 + Math.random() * 25,
             lastUpdated: new Date().toLocaleTimeString(),
           }
@@ -905,9 +1200,9 @@ export default function StockScreener() {
                     <div>
                       <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2">
                         <TrendingDown className="h-4 w-4" />
-                        Risk Factors
+                        Risk Factors & Warnings
                       </h4>
-                      <ul className="space-y-2">
+                      <ul className="space-y-2 max-h-96 overflow-y-auto">
                         {selectedResult.warnings.map((warning, index) => (
                           <li key={index} className="text-sm flex items-start gap-2">
                             <span className="text-red-500 mt-1">•</span>

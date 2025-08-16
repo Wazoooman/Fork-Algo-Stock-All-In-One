@@ -261,34 +261,48 @@ function extractTextContent(xml: string, tags: string[]): string {
 function cleanText(text: string): string {
   if (!text) return ""
 
-  return (
-    text
-      // Remove CDATA sections
-      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-      // Remove script and style tags completely
-      .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, "")
-      // Remove comments
-      .replace(/<!--[\s\S]*?-->/g, "")
-      // Remove all HTML tags (including self-closing ones)
-      .replace(/<[^>]+>/g, " ")
-      // Decode HTML entities
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&apos;/g, "'")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
-      .replace(/&#x([a-fA-F0-9]+);/g, (match, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
-      // Clean up whitespace
-      .replace(/\s+/g, " ")
-      .replace(/\n\s*\n/g, "\n")
-      // Remove leading/trailing whitespace
-      .trim()
-      // Limit length to prevent overly long descriptions
-      .substring(0, 500)
-  )
+  const cleaned = text
+    // Remove CDATA sections
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    // Remove script and style tags completely
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, "")
+    // Remove comments
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/[<>]/g, "")
+    // Decode HTML entities
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&hellip;/g, "...")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&rdquo;/g, '"')
+    .replace(/&ldquo;/g, '"')
+    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+    .replace(/&#x([a-fA-F0-9]+);/g, (match, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replace(/\s+/g, " ")
+    .replace(/\n\s*\n/g, "\n")
+    .replace(/property=["'][^"']*["']/g, "")
+    .replace(/class=["'][^"']*["']/g, "")
+    .replace(/id=["'][^"']*["']/g, "")
+    // Remove leading/trailing whitespace
+    .trim()
+    // Limit length to prevent overly long descriptions
+    .substring(0, 500)
+
+  if (cleaned.includes(">")) {
+    return ""
+  }
+
+  return cleaned
 }
 
 export async function GET(request: NextRequest) {

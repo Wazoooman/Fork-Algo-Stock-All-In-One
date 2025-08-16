@@ -1,19 +1,30 @@
 "use client"
 
 import { useState, useEffect, createContext, useContext } from "react"
-import { useTheme } from "next-themes"
-import { Moon, Sun, TrendingUp, BookOpen, Newspaper, BarChart3, Settings, User } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { useTheme } from "@/components/theme-provider"
+import { TrendingUp } from "lucide-react"
 import { TrendingUpIcon, CheckCircle, XCircle } from "lucide-react"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 
 // Import our main components
 import StockScreener from "@/components/stock-screener"
 import TradeJournal from "@/components/trade-journal"
 import NewsFeed from "@/components/news-feed"
 import Dashboard from "@/components/dashboard"
-import UserProfile from "@/components/user-profile"
 import PlatformSettings from "@/components/platform-settings"
+import { AppSidebar } from "@/components/app-sidebar"
+import { UserMenu } from "@/components/auth/user-menu"
+import { useAuth } from "@/lib/auth"
+import { UserDataService } from "@/lib/user-data"
 
 interface ScreenerResult {
   symbol: string
@@ -135,7 +146,7 @@ interface SPY0DTEAnalysis {
   confidence: number
 }
 
-type ActiveTab = "dashboard" | "screener" | "journal" | "news" | "profile" | "settings"
+type ActiveTab = "dashboard" | "screener" | "journal" | "news" | "settings"
 
 // Currency Context
 interface CurrencyContextType {
@@ -298,7 +309,24 @@ const calculateSPY0DTEAnalysis = (selectedStock?: ScreenerResult): SPY0DTEAnalys
   }
 }
 
+const tabTitles = {
+  dashboard: "Dashboard",
+  screener: "Stock Screener",
+  journal: "Trade Journal",
+  news: "News Feed",
+  settings: "Settings",
+}
+
+const tabDescriptions = {
+  dashboard: "Overview and quick stats",
+  screener: "Algorithmic stock analysis",
+  journal: "Log and track your trades",
+  news: "Real-time market news",
+  settings: "Platform configuration & profile",
+}
+
 export default function TradingPlatform() {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard")
   const [loading, setLoading] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
@@ -370,18 +398,34 @@ export default function TradingPlatform() {
 
   // Load currency from settings
   useEffect(() => {
-    const savedSettings = localStorage.getItem("platformSettings")
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings)
-        if (settings.currency) {
-          setCurrency(settings.currency)
+    if (user) {
+      // Load user-specific settings
+      const userSettings = UserDataService.getPlatformSettings(user.id)
+      if (userSettings.currency) {
+        setCurrency(userSettings.currency)
+      }
+    } else {
+      // Load anonymous settings
+      const savedSettings = localStorage.getItem("platformSettings")
+      if (savedSettings) {
+        try {
+          const settings = JSON.parse(savedSettings)
+          if (settings.currency) {
+            setCurrency(settings.currency)
+          }
+        } catch (error) {
+          console.error("Error loading currency setting:", error)
         }
-      } catch (error) {
-        console.error("Error loading currency setting:", error)
       }
     }
-  }, [])
+  }, [user])
+
+  // Migrate anonymous data when user logs in
+  useEffect(() => {
+    if (user) {
+      UserDataService.migrateAnonymousData(user.id)
+    }
+  }, [user])
 
   // Currency functions
   const convertPrice = (price: number): number => {
@@ -793,7 +837,9 @@ export default function TradingPlatform() {
           bullishSignal: true,
           strength: "Moderate" as const,
           timeframe: "Days",
-          example: "10x normal call volume with technical setup",
+          example: selectedStock
+            ? `${selectedStock.symbol} at ${formatPrice(currentPrice)}, sell ${formatPrice(currentPrice * 1.05)} calls`
+            : "Stock near resistance, sell covered calls",
           riskLevel: "High" as const,
           successRate: "55-60%",
           entryPrice: currentPrice * 0.025, // Call option premium
@@ -1231,46 +1277,7 @@ export default function TradingPlatform() {
     }
   }
 
-  const navigationItems = [
-    {
-      id: "dashboard" as ActiveTab,
-      label: "Dashboard",
-      icon: BarChart3,
-      description: "Overview and quick stats",
-    },
-    {
-      id: "screener" as ActiveTab,
-      label: "Stock Screener",
-      icon: TrendingUp,
-      description: "Algorithmic stock analysis",
-    },
-    {
-      id: "journal" as ActiveTab,
-      label: "Trade Journal",
-      icon: BookOpen,
-      description: "Log and track your trades",
-    },
-    {
-      id: "news" as ActiveTab,
-      label: "News Feed",
-      icon: Newspaper,
-      description: "Real-time market news",
-    },
-    {
-      id: "profile" as ActiveTab,
-      label: "Profile",
-      icon: User,
-      description: "Your trading profile",
-    },
-    {
-      id: "settings" as ActiveTab,
-      label: "Settings",
-      icon: Settings,
-      description: "Platform configuration",
-    },
-  ]
-
-  const renderActiveComponent = () => {
+  const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
         return <Dashboard onNavigate={setActiveTab} />
@@ -1280,8 +1287,6 @@ export default function TradingPlatform() {
         return <TradeJournal />
       case "news":
         return <NewsFeed />
-      case "profile":
-        return <UserProfile />
       case "settings":
         return <PlatformSettings onCurrencyChange={setCurrency} />
       default:
@@ -1299,72 +1304,35 @@ export default function TradingPlatform() {
 
   return (
     <CurrencyContext.Provider value={currencyContextValue}>
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="border-b bg-card">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-8 w-8 text-primary" />
-                  <div>
-                    <h1 className="text-2xl font-bold">TradingHub</h1>
-                    <p className="text-sm text-muted-foreground">Your Complete Trading Platform</p>
-                  </div>
-                </div>
-                <Badge variant="outline" className="ml-4">
-                  v1.0 Beta
-                </Badge>
+      <div className="min-h-screen bg-gray-950">
+        <SidebarProvider>
+          <AppSidebar activeTab={activeTab} onNavigate={setActiveTab} />
+          <SidebarInset>
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b border-gray-800 px-4 bg-gray-900/50">
+              <SidebarTrigger className="-ml-1 text-gray-300 hover:text-white hover:bg-gray-800" />
+              <Separator orientation="vertical" className="mr-2 h-4 bg-gray-700" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink href="#" className="text-gray-400 hover:text-gray-200">
+                      MarketDesk
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block text-gray-600" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-gray-200">{tabTitles[activeTab]}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+              <div className="ml-auto">
+                <UserMenu />
               </div>
-
-              <div className="flex items-center gap-4">
-                {/* Theme Toggle */}
-                {mounted && (
-                  <Button variant="outline" size="icon" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-                    <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                    <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    <span className="sr-only">Toggle theme</span>
-                  </Button>
-                )}
-              </div>
+            </header>
+            <div className="flex flex-1 flex-col gap-4 p-4 bg-gray-950">
+              <div className="mx-auto w-full">{renderContent()}</div>
             </div>
-          </div>
-        </header>
-
-        <div className="flex">
-          {/* Sidebar Navigation */}
-          <nav className="w-64 border-r bg-card min-h-[calc(100vh-73px)]">
-            <div className="p-4">
-              <div className="space-y-2">
-                {navigationItems.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === item.id
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                    >
-                      <Icon className="h-5 w-5" />
-                      <div>
-                        <div className="font-medium">{item.label}</div>
-                        <div className="text-xs opacity-70">{item.description}</div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </nav>
-
-          {/* Main Content */}
-          <main className="flex-1 min-h-[calc(100vh-73px)] overflow-auto">
-            <div className="p-6">{renderActiveComponent()}</div>
-          </main>
-        </div>
+          </SidebarInset>
+        </SidebarProvider>
       </div>
     </CurrencyContext.Provider>
   )
