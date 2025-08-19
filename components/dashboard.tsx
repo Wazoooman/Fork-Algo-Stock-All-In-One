@@ -11,7 +11,6 @@ import {
   BarChart3,
   BookOpen,
   Newspaper,
-  Activity,
   Target,
   Calendar,
   Brain,
@@ -20,6 +19,8 @@ import {
 import { useCurrency } from "@/app/page"
 import dynamic from "next/dynamic"
 import TradingHeatmap from "./trading-heatmap"
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts"
+import { Button } from "@/components/ui/button"
 
 // Dynamically import the entire chart component to prevent SSR issues and improve loading
 const ChartComponents = dynamic(() => import("./chart-components"), {
@@ -65,6 +66,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [isDataLoaded, setIsDataLoaded] = useState(false)
   const [chartsReady, setChartsReady] = useState(false)
   const { formatPrice } = useCurrency()
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<"1w" | "1m" | "3m" | "6m" | "1Y">("1m")
 
   // Pre-calculate and memoize chart data to prevent recalculation
   const chartData = useMemo(() => {
@@ -170,6 +172,112 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       }))
   }, [trades])
 
+  const profitChartData = useMemo(() => {
+    if (!isDataLoaded || trades.length === 0) return []
+
+    const now = new Date()
+    let startDate: Date
+
+    switch (selectedTimeFrame) {
+      case "1w":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case "1m":
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case "3m":
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case "6m":
+        startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
+        break
+      case "1Y":
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+        break
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    }
+
+    const closedTrades = trades
+      .filter((trade) => trade.status === "Closed" && trade.pnl !== undefined)
+      .map((trade) => ({
+        ...trade,
+        date: new Date(trade.exitDate || trade.entryDate),
+        pnl: trade.pnl || 0,
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+
+    if (closedTrades.length === 0) return []
+
+    const filteredTrades = closedTrades.filter((trade) => trade.date >= startDate && trade.date <= now)
+
+    if (filteredTrades.length === 0) return []
+
+    // Create cumulative P&L data points
+    const lineData = []
+    let cumulativePnL = 0
+
+    // Add starting point
+    lineData.push({
+      date: startDate.toISOString().split("T")[0],
+      value: 0,
+      label: startDate.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+    })
+
+    filteredTrades.forEach((trade, index) => {
+      cumulativePnL += trade.pnl
+      lineData.push({
+        date: trade.date.toISOString().split("T")[0],
+        value: cumulativePnL,
+        label: trade.date.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        trade: trade,
+      })
+    })
+
+    return lineData
+  }, [trades, selectedTimeFrame, isDataLoaded])
+
+  const timeFrameMetrics = useMemo(() => {
+    const chartData = profitChartData
+    if (chartData.length === 0) {
+      return {
+        totalReturn: 0,
+        totalTrades: 0,
+        winRate: 0,
+        bestPeriod: 0,
+        worstPeriod: 0,
+        avgPeriodReturn: 0,
+      }
+    }
+
+    const totalReturn = chartData[chartData.length - 1]?.value || 0
+    const totalTrades = chartData.length - 1 // Subtract 1 for starting point
+    const profitableTrades = chartData.filter(
+      (d, index) => index > 0 && d.value > (chartData[index - 1]?.value || 0),
+    ).length
+    const winRate = totalTrades > 0 ? (profitableTrades / totalTrades) * 100 : 0
+
+    // Calculate best and worst single trade impacts
+    let bestTrade = 0
+    let worstTrade = 0
+    for (let i = 1; i < chartData.length; i++) {
+      const tradeImpact = chartData[i].value - chartData[i - 1].value
+      bestTrade = Math.max(bestTrade, tradeImpact)
+      worstTrade = Math.min(worstTrade, tradeImpact)
+    }
+
+    const avgReturn = totalTrades > 0 ? totalReturn / totalTrades : 0
+
+    return {
+      totalReturn,
+      totalTrades,
+      winRate,
+      bestPeriod: bestTrade,
+      worstPeriod: worstTrade,
+      avgPeriodReturn: avgReturn,
+    }
+  }, [profitChartData])
+
   const activePositions = useMemo(() => {
     return trades
       .filter((t) => t.status === "Open")
@@ -187,7 +295,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     <div className="space-y-6">
       {/* Welcome Section */}
       <div>
-        <h1 className="text-3xl font-bold">Welcome to TradingHub</h1>
+        <h1 className="text-3xl font-bold">Welcome to MarketDesk</h1>
         <p className="text-muted-foreground mt-2">
           Your comprehensive platform for stock analysis, trade journaling, and market insights
         </p>
@@ -252,7 +360,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* Compact Psychology Analytics from Trade Journal - Only show if there's data and charts are ready */}
       {chartsReady && (chartData.emotionData.length > 0 || chartData.mistakeData.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Emotions Analytics - Smaller */}
           {chartData.emotionData.length > 0 && (
             <Card className="lg:col-span-1">
@@ -332,37 +440,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </CardContent>
             </Card>
           )}
-
-          {/* Additional Performance Metrics */}
-          <Card className="lg:col-span-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Performance Metrics
-              </CardTitle>
-              <CardDescription className="text-xs">Key trading ratios</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Profit Factor</span>
-                <span className="text-sm font-semibold">{stats.profitFactor.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Avg Win</span>
-                <span className="text-sm font-semibold text-green-600">{formatPrice(stats.avgWin)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Avg Loss</span>
-                <span className="text-sm font-semibold text-red-600">{formatPrice(-stats.avgLoss)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Win/Loss Ratio</span>
-                <span className="text-sm font-semibold">
-                  {stats.avgLoss > 0 ? (stats.avgWin / stats.avgLoss).toFixed(2) : "N/A"}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
 
@@ -398,6 +475,160 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Profit Performance Over Time */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-2xl font-bold text-gray-600">
+                Trading Performance
+              </CardTitle>
+              <CardDescription className="text-gray-500 mt-1 text-sm uppercase tracking-wide">
+                PROFIT & LOSS (USD)
+              </CardDescription>
+            </div>
+            <div className="flex gap-1">
+              {(["1w", "1m", "3m", "6m", "1Y"] as const).map((timeFrame) => (
+                <Button
+                  key={timeFrame}
+                  variant={selectedTimeFrame === timeFrame ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedTimeFrame(timeFrame)}
+                  className="text-xs px-2 py-1"
+                >
+                  {timeFrame.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {profitChartData.length > 0 ? (
+            <div className="space-y-4">
+              <div className="h-80 p-6">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={profitChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <defs>
+                      <linearGradient id="orangeGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#EA580C" stopOpacity={0.75} />
+                        <stop offset="100%" stopColor="#EA580C" stopOpacity={0.25} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="1 1" stroke="#f1f5f9" className="opacity-30" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12, fill: "#64748b" }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickLine={{ stroke: "#e2e8f0" }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value)
+                        return selectedTimeFrame === "1w"
+                          ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                          : selectedTimeFrame === "1Y"
+                            ? date.toLocaleDateString("en-US", { month: "short" })
+                            : date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                      }}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: "#64748b" }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickLine={{ stroke: "#e2e8f0" }}
+                      tickFormatter={(value) => formatPrice(value)}
+                      domain={["dataMin - 100", "dataMax + 100"]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                      }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload
+                          return (
+                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                              <p className="text-sm font-medium text-foreground">
+                                {new Date(label).toLocaleDateString("en-US", {
+                                  month: "long",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })}
+                              </p>
+                              <p className="text-lg font-bold text-foreground mt-1">{formatPrice(data.value)}</p>
+                              {data.trade && (
+                                <div className="mt-2 pt-2 border-t border-border">
+                                  <p className="text-xs text-muted-foreground">
+                                    {data.trade.symbol}: {formatPrice(data.trade.pnl)}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#EA580C"
+                      strokeWidth={3}
+                      fill="url(#orangeGradient)"
+                      dot={{ fill: "#EA580C", strokeWidth: 0, r: 6 }}
+                      activeDot={{ r: 8, fill: "#EA580C" }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Time Frame Metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t">
+                <div className="text-center">
+                  <div
+                    className={`text-lg font-bold ${timeFrameMetrics.totalReturn >= 0 ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {formatPrice(timeFrameMetrics.totalReturn)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Total Return</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold">{timeFrameMetrics.totalTrades}</div>
+                  <div className="text-xs text-muted-foreground">Total Trades</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold">{timeFrameMetrics.winRate.toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground">Period Win Rate</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-green-600">{formatPrice(timeFrameMetrics.bestPeriod)}</div>
+                  <div className="text-xs text-muted-foreground">Best Period</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-red-600">{formatPrice(timeFrameMetrics.worstPeriod)}</div>
+                  <div className="text-xs text-muted-foreground">Worst Period</div>
+                </div>
+                <div className="text-center">
+                  <div
+                    className={`text-lg font-bold ${timeFrameMetrics.avgPeriodReturn >= 0 ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {formatPrice(timeFrameMetrics.avgPeriodReturn)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Avg per Period</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No trades found for the selected time frame</p>
+              <p className="text-sm">Complete some trades to see your profit performance</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
