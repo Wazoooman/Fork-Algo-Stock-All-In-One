@@ -35,7 +35,15 @@ export function ThemeProvider({
   disableTransitionOnChange = false,
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(storageKey) as Theme) || defaultTheme)
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return defaultTheme
+    try {
+      return (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    } catch (error) {
+      console.error("Error reading theme from localStorage:", error)
+      return defaultTheme
+    }
+  })
 
   useEffect(() => {
     const root = window.document.documentElement
@@ -55,7 +63,13 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(storageKey, theme)
+        } catch (error) {
+          console.error("Error saving theme to localStorage:", error)
+        }
+      }
       setTheme(theme)
     },
   }

@@ -86,17 +86,26 @@ export class AuthService {
 
   static getCurrentUser(): User | null {
     if (typeof window === "undefined") return null
-    const user = localStorage.getItem("marketdesk_current_user")
-    return user ? JSON.parse(user) : null
+    try {
+      const user = localStorage.getItem("marketdesk_current_user")
+      return user ? JSON.parse(user) : null
+    } catch (error) {
+      console.error("Error getting current user:", error)
+      return null
+    }
   }
 
   static setCurrentUser(user: User | null) {
     if (typeof window === "undefined") return
 
-    if (user) {
-      localStorage.setItem("marketdesk_current_user", JSON.stringify(user))
-    } else {
-      localStorage.removeItem("marketdesk_current_user")
+    try {
+      if (user) {
+        localStorage.setItem("marketdesk_current_user", JSON.stringify(user))
+      } else {
+        localStorage.removeItem("marketdesk_current_user")
+      }
+    } catch (error) {
+      console.error("Error setting current user:", error)
     }
   }
 
@@ -106,9 +115,12 @@ export class AuthService {
     } catch (error) {
       console.error("Logout error:", error)
     } finally {
-      // Always clear local storage
       if (typeof window !== "undefined") {
-        localStorage.removeItem("marketdesk_current_user")
+        try {
+          localStorage.removeItem("marketdesk_current_user")
+        } catch (error) {
+          console.error("Error clearing localStorage:", error)
+        }
       }
     }
   }
