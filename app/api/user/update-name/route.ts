@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
+import { DatabaseService } from "@/lib/database"
 
-const sql = neon(process.env.DATABASE_URL!)
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!)
 
 async function getUserFromToken(request: NextRequest) {
@@ -30,19 +29,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: "First name and last name are required" }, { status: 400 })
     }
 
-    // Update user name in database
-    const result = await sql`
-      UPDATE neon_auth.users 
-      SET first_name = ${firstName}, last_name = ${lastName}, updated_at = NOW()
-      WHERE id = ${user.userId}
-      RETURNING id, email, first_name, last_name, subscription, created_at, email_verified
-    `
+    const updatedUser = await DatabaseService.updateUserName(user.userId, firstName, lastName)
 
-    if (result.length === 0) {
+    if (!updatedUser) {
       return NextResponse.json({ success: false, error: "User not found" }, { status: 404 })
     }
-
-    const updatedUser = result[0]
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
-import { neon } from "@neondatabase/serverless"
+import { getSupabaseServerClient } from './supabase'
 
-const sql = neon(process.env.DATABASE_URL!)
+const sql = getSupabaseServerClient()
 
 export interface DatabaseUser {
   id: string
@@ -58,69 +58,102 @@ export class DatabaseService {
     verificationToken: string,
     tokenExpires: Date,
   ): Promise<DatabaseUser> {
-    const result = await sql`
-      INSERT INTO neon_auth.users (
-        email, first_name, last_name, password_hash, 
-        email_verified, verification_token, verification_token_expires,
-        subscription
-      ) VALUES (
-        ${email}, ${firstName}, ${lastName}, ${passwordHash}, false, 
-        ${verificationToken}, ${tokenExpires.toISOString()}, 'free'
-      ) RETURNING *
-    `
-    return result[0] as DatabaseUser
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        password_hash: passwordHash,
+        email_verified: false,
+        verification_token: verificationToken,
+        verification_token_expires: tokenExpires.toISOString(),
+        subscription: 'free'
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as DatabaseUser
   }
 
   static async getUserByEmail(email: string): Promise<DatabaseUser | null> {
-    const result = await sql`
-      SELECT * FROM neon_auth.users WHERE email = ${email} LIMIT 1
-    `
-    return (result[0] as DatabaseUser) || null
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return (data as DatabaseUser) || null
   }
 
   static async getUserById(id: string): Promise<DatabaseUser | null> {
-    const result = await sql`
-      SELECT * FROM neon_auth.users WHERE id = ${id} LIMIT 1
-    `
-    return (result[0] as DatabaseUser) || null
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return (data as DatabaseUser) || null
   }
 
   static async verifyEmail(token: string): Promise<boolean> {
-    const result = await sql`
-      UPDATE neon_auth.users 
-      SET email_verified = true, verification_token = NULL, verification_token_expires = NULL
-      WHERE verification_token = ${token} 
-      AND verification_token_expires > NOW()
-      RETURNING id
-    `
-    return result.length > 0
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        email_verified: true,
+        verification_token: null,
+        verification_token_expires: null
+      })
+      .eq('verification_token', token)
+      .gt('verification_token_expires', new Date().toISOString())
+      .select()
+    
+    if (error) throw error
+    return data.length > 0
   }
 
   static async updateUserName(userId: string, firstName: string, lastName: string): Promise<DatabaseUser | null> {
-    const result = await sql`
-      UPDATE neon_auth.users 
-      SET first_name = ${firstName}, last_name = ${lastName}, updated_at = NOW()
-      WHERE id = ${userId}
-      RETURNING *
-    `
-    return (result[0] as DatabaseUser) || null
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        first_name: firstName,
+        last_name: lastName,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return (data as DatabaseUser) || null
   }
 
   static async deleteUser(userId: string): Promise<boolean> {
     try {
-      await sql.begin(async (sql) => {
-        // Delete user preferences
-        await sql`DELETE FROM neon_auth.user_preferences WHERE user_id = ${userId}`
-
-        // Delete trade history
-        await sql`DELETE FROM neon_auth.trade_history WHERE user_id = ${userId}`
-
-        // Delete watchlists
-        await sql`DELETE FROM neon_auth.watchlists WHERE user_id = ${userId}`
-
-        // Finally delete the user
-        await sql`DELETE FROM neon_auth.users WHERE id = ${userId}`
-      })
+      const supabase = await getSupabaseServerClient()
+      
+      // Delete related data first (Supabase handles this via CASCADE if configured)
+      await supabase.from('user_preferences').delete().eq('user_id', userId)
+      await supabase.from('trade_history').delete().eq('user_id', userId)
+      await supabase.from('watchlists').delete().eq('user_id', userId)
+      
+      // Delete the user
+      const { error } = await supabase.from('users').delete().eq('id', userId)
+      
+      if (error) throw error
       return true
     } catch (error) {
       console.error("Delete user error:", error)
@@ -130,41 +163,67 @@ export class DatabaseService {
 
   // Watchlist management
   static async getUserWatchlists(userId: string): Promise<Watchlist[]> {
-    const result = await sql`
-      SELECT * FROM neon_auth.watchlists 
-      WHERE user_id = ${userId} 
-      ORDER BY created_at DESC
-    `
-    return result as Watchlist[]
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('watchlists')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data as Watchlist[]
   }
 
   static async createWatchlist(userId: string, name: string, symbols: string[] = []): Promise<Watchlist> {
-    const result = await sql`
-      INSERT INTO neon_auth.watchlists (user_id, name, symbols, created_at, updated_at)
-      VALUES (${userId}, ${name}, ${JSON.stringify(symbols)}, NOW(), NOW())
-      RETURNING *
-    `
-    return result[0] as Watchlist
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('watchlists')
+      .insert({
+        user_id: userId,
+        name,
+        symbols,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Watchlist
   }
 
   static async updateWatchlist(id: string, name: string, symbols: string[]): Promise<Watchlist> {
-    const result = await sql`
-      UPDATE neon_auth.watchlists 
-      SET name = ${name}, symbols = ${JSON.stringify(symbols)}, updated_at = NOW()
-      WHERE id = ${id}
-      RETURNING *
-    `
-    return result[0] as Watchlist
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('watchlists')
+      .update({
+        name,
+        symbols,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Watchlist
   }
 
   // Trade history management
   static async getUserTradeHistory(userId: string): Promise<TradeHistory[]> {
-    const result = await sql`
-      SELECT * FROM neon_auth.trade_history 
-      WHERE user_id = ${userId} 
-      ORDER BY trade_date DESC
-    `
-    return result as TradeHistory[]
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('trade_history')
+      .select('*')
+      .eq('user_id', userId)
+      .order('trade_date', { ascending: false })
+    
+    if (error) throw error
+    return data as TradeHistory[]
   }
 
   static async addTradeHistory(
@@ -175,45 +234,78 @@ export class DatabaseService {
     price: number,
     notes?: string,
   ): Promise<TradeHistory> {
-    const result = await sql`
-      INSERT INTO neon_auth.trade_history (user_id, symbol, action, quantity, price, notes, created_at)
-      VALUES (${userId}, ${symbol}, ${action}, ${quantity}, ${price}, ${notes || null}, NOW())
-      RETURNING *
-    `
-    return result[0] as TradeHistory
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('trade_history')
+      .insert({
+        user_id: userId,
+        symbol,
+        action,
+        quantity,
+        price,
+        notes: notes || null,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as TradeHistory
   }
 
   // User preferences management
   static async getUserPreferences(userId: string): Promise<UserPreferences | null> {
-    const result = await sql`
-      SELECT * FROM neon_auth.user_preferences WHERE user_id = ${userId} LIMIT 1
-    `
-    return (result[0] as UserPreferences) || null
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return (data as UserPreferences) || null
   }
 
   static async createUserPreferences(userId: string): Promise<UserPreferences> {
-    const result = await sql`
-      INSERT INTO neon_auth.user_preferences (user_id, created_at, updated_at)
-      VALUES (${userId}, NOW(), NOW())
-      RETURNING *
-    `
-    return result[0] as UserPreferences
+    const supabase = await getSupabaseServerClient()
+    
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .insert({
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as UserPreferences
   }
 
   static async updateUserPreferences(userId: string, preferences: Partial<UserPreferences>): Promise<UserPreferences> {
+    const supabase = await getSupabaseServerClient()
     const { theme, notifications_enabled, default_watchlist_id, preferences: prefs } = preferences
 
-    const result = await sql`
-      UPDATE neon_auth.user_preferences 
-      SET 
-        theme = COALESCE(${theme || null}, theme),
-        notifications_enabled = COALESCE(${notifications_enabled ?? null}, notifications_enabled),
-        default_watchlist_id = COALESCE(${default_watchlist_id || null}, default_watchlist_id),
-        preferences = COALESCE(${prefs ? JSON.stringify(prefs) : null}, preferences),
-        updated_at = NOW()
-      WHERE user_id = ${userId}
-      RETURNING *
-    `
-    return result[0] as UserPreferences
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    }
+    
+    if (theme !== undefined) updateData.theme = theme
+    if (notifications_enabled !== undefined) updateData.notifications_enabled = notifications_enabled
+    if (default_watchlist_id !== undefined) updateData.default_watchlist_id = default_watchlist_id
+    if (prefs !== undefined) updateData.preferences = prefs
+
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .update(updateData)
+      .eq('user_id', userId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as UserPreferences
   }
 }

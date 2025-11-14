@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
+import { DatabaseService } from "@/lib/database"
 
-const sql = neon(process.env.DATABASE_URL!)
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!)
 
 async function getUserFromToken(request: NextRequest) {
@@ -24,20 +23,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    // Delete all user data in the correct order (respecting foreign key constraints)
-    await sql.begin(async (sql) => {
-      // Delete user preferences
-      await sql`DELETE FROM neon_auth.user_preferences WHERE user_id = ${user.userId}`
-
-      // Delete trade history
-      await sql`DELETE FROM neon_auth.trade_history WHERE user_id = ${user.userId}`
-
-      // Delete watchlists
-      await sql`DELETE FROM neon_auth.watchlists WHERE user_id = ${user.userId}`
-
-      // Finally delete the user
-      await sql`DELETE FROM neon_auth.users WHERE id = ${user.userId}`
-    })
+    const success = await DatabaseService.deleteUser(user.userId)
+    
+    if (!success) {
+      return NextResponse.json({ success: false, error: "Failed to delete account" }, { status: 500 })
+    }
 
     // Clear the auth cookie
     const response = NextResponse.json({ success: true })
