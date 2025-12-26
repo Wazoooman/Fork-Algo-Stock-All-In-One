@@ -1,4 +1,3 @@
-// User-specific data storage
 export class UserDataService {
   private static getUserKey(userId: string, dataType: string): string {
     return `marketdesk_user_${userId}_${dataType}`
@@ -50,16 +49,16 @@ export class UserDataService {
     return data ? JSON.parse(data) : {}
   }
 
-  // Watchlists
-  static saveWatchlists(userId: string, watchlists: any[]) {
+  // Portfolio Holdings
+  static savePortfolioHoldings(userId: string, holdings: any[]) {
     if (!this.isClient()) return
-    const key = this.getUserKey(userId, "watchlists")
-    localStorage.setItem(key, JSON.stringify(watchlists))
+    const key = this.getUserKey(userId, "holdings")
+    localStorage.setItem(key, JSON.stringify(holdings))
   }
 
-  static getWatchlists(userId: string): any[] {
+  static getPortfolioHoldings(userId: string): any[] {
     if (!this.isClient()) return []
-    const key = this.getUserKey(userId, "watchlists")
+    const key = this.getUserKey(userId, "holdings")
     const data = localStorage.getItem(key)
     return data ? JSON.parse(data) : []
   }
@@ -67,7 +66,7 @@ export class UserDataService {
   // Clear all user data (for logout/account deletion)
   static clearUserData(userId: string) {
     if (!this.isClient()) return
-    const keys = ["trades", "settings", "profile", "watchlists"]
+    const keys = ["trades", "settings", "profile", "holdings"]
     keys.forEach((dataType) => {
       const key = this.getUserKey(userId, dataType)
       localStorage.removeItem(key)
@@ -77,6 +76,7 @@ export class UserDataService {
   // Migrate anonymous data to user account
   static migrateAnonymousData(userId: string) {
     if (!this.isClient()) return
+
     // Migrate existing trade journal data
     const existingTrades = localStorage.getItem("tradeJournal")
     if (existingTrades) {
